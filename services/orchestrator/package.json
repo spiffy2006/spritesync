@@ -1,0 +1,18 @@
+{
+  "name": "spritesync-orchestrator",
+  "version": "1.0.0",
+  "description": "Orchestrator service for coordinating render pipeline jobs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

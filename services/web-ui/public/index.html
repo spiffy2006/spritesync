@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpriteSync - Podcast to Video Render System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .panel {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .panel h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        input[type="text"],
+        input[type="file"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus,
+        input[type="file"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            width: 100%;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .job-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .job-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .job-item:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        .job-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .job-status.pending { background: #fff3cd; color: #856404; }
+        .job-status.processing { background: #cce5ff; color: #004085; }
+        .job-status.completed { background: #d4edda; color: #155724; }
+        .job-status.failed { background: #f8d7da; color: #721c24; }
+        .upload-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎙️ SpriteSync</h1>
+            <p class="subtitle">Podcast to Video Render System</p>
+        </header>
+
+        <div class="main-content">
+            <div class="panel">
+                <h2>Create New Job</h2>
+                
+                <div class="form-group">
+                    <label for="jobName">Job Name</label>
+                    <input type="text" id="jobName" placeholder="My Podcast Episode">
+                </div>
+
+                <div class="form-group">
+                    <label for="audioFile">Audio File</label>
+                    <input type="file" id="audioFile" accept="audio/*">
+                    <div id="audioUploadInfo" class="upload-info"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="spriteFiles">Sprite Images (Multiple Speakers)</label>
+                    <input type="file" id="spriteFiles" accept="image/*" multiple>
+                    <div id="spriteUploadInfo" class="upload-info"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="speakerNames">Speaker Names (comma-separated)</label>
+                    <input type="text" id="speakerNames" placeholder="Alice, Bob, Charlie">
+                </div>
+
+                <div class="form-group">
+                    <label for="videoResolution">Video Resolution</label>
+                    <select id="videoResolution">
+                        <option value="1920x1080">1920x1080 (Full HD)</option>
+                        <option value="1280x720">1280x720 (HD)</option>
+                        <option value="3840x2160">3840x2160 (4K)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="backgroundColor">Background Color</label>
+                    <input type="text" id="backgroundColor" value="#ffffff" placeholder="#ffffff">
+                </div>
+
+                <button id="submitBtn" onclick="submitJob()">Create & Trigger Job</button>
+                <div id="submitStatus" class="status"></div>
+            </div>
+
+            <div class="panel">
+                <h2>Recent Jobs</h2>
+                <button onclick="refreshJobs()" style="margin-bottom: 15px;">Refresh Jobs</button>
+                <div id="jobList" class="job-list">
+                    <p style="color: #666; text-align: center;">No jobs yet. Create your first job!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let audioFileId = null;
+        let spriteFileIds = [];
+
+        // Auto-refresh jobs every 10 seconds
+        setInterval(refreshJobs, 10000);
+        
+        // Initial load
+        refreshJobs();
+
+        // Handle audio file upload
+        document.getElementById('audioFile').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            try {
+                document.getElementById('audioUploadInfo').textContent = 'Uploading...';
+                const response = await fetch('/api/upload/audio', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    audioFileId = data.fileId;
+                    document.getElementById('audioUploadInfo').textContent = 
+                        `✓ Uploaded: ${data.originalName} (${(data.size / 1024 / 1024).toFixed(2)} MB)`;
+                }
+            } catch (error) {
+                document.getElementById('audioUploadInfo').textContent = `✗ Error: ${error.message}`;
+            }
+        });
+
+        // Handle sprite files upload
+        document.getElementById('spriteFiles').addEventListener('change', async (e) => {
+            const files = e.target.files;
+            if (!files.length) return;
+
+            const formData = new FormData();
+            for (let file of files) {
+                formData.append('sprites', file);
+            }
+
+            try {
+                document.getElementById('spriteUploadInfo').textContent = 'Uploading...';
+                const response = await fetch('/api/upload/sprites', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    spriteFileIds = data.files.map(f => f.fileId);
+                    document.getElementById('spriteUploadInfo').textContent = 
+                        `✓ Uploaded ${data.files.length} sprite(s)`;
+                }
+            } catch (error) {
+                document.getElementById('spriteUploadInfo').textContent = `✗ Error: ${error.message}`;
+            }
+        });
+
+        async function submitJob() {
+            const jobName = document.getElementById('jobName').value;
+            const speakerNames = document.getElementById('speakerNames').value;
+            const videoResolution = document.getElementById('videoResolution').value;
+            const backgroundColor = document.getElementById('backgroundColor').value;
+            
+            if (!jobName) {
+                showStatus('submitStatus', 'Please enter a job name', 'error');
+                return;
+            }
+            
+            if (!audioFileId) {
+                showStatus('submitStatus', 'Please upload an audio file', 'error');
+                return;
+            }
+
+            try {
+                document.getElementById('submitBtn').disabled = true;
+                showStatus('submitStatus', 'Creating job...', 'info');
+
+                // First, save the configuration
+                const configResponse = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: jobName,
+                        speakerNames: speakerNames.split(',').map(s => s.trim()).filter(s => s),
+                        videoResolution,
+                        backgroundColor
+                    })
+                });
+                const configData = await configResponse.json();
+
+                // Then trigger the job
+                const jobResponse = await fetch('/api/jobs/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        configId: configData.configId,
+                        audioFileId: audioFileId,
+                        spriteFiles: spriteFileIds
+                    })
+                });
+                const jobData = await jobResponse.json();
+
+                if (jobData.success) {
+                    showStatus('submitStatus', `Job created successfully! Job ID: ${jobData.jobId}`, 'success');
+                    // Reset form
+                    document.getElementById('jobName').value = '';
+                    document.getElementById('audioFile').value = '';
+                    document.getElementById('spriteFiles').value = '';
+                    document.getElementById('audioUploadInfo').textContent = '';
+                    document.getElementById('spriteUploadInfo').textContent = '';
+                    audioFileId = null;
+                    spriteFileIds = [];
+                    // Refresh job list
+                    setTimeout(refreshJobs, 1000);
+                } else {
+                    showStatus('submitStatus', `Error: ${jobData.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus('submitStatus', `Error: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('submitBtn').disabled = false;
+            }
+        }
+
+        async function refreshJobs() {
+            try {
+                const response = await fetch('/api/jobs');
+                const jobs = await response.json();
+                
+                const jobList = document.getElementById('jobList');
+                if (!jobs || jobs.length === 0) {
+                    jobList.innerHTML = '<p style="color: #666; text-align: center;">No jobs yet. Create your first job!</p>';
+                    return;
+                }
+
+                jobList.innerHTML = jobs.map(job => `
+                    <div class="job-item" onclick="viewJob('${job.id}')">
+                        <div>
+                            <strong>${job.name || 'Unnamed Job'}</strong>
+                            <span class="job-status ${job.status}">${job.status}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            ID: ${job.id} | Created: ${new Date(job.createdAt).toLocaleString()}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error refreshing jobs:', error);
+            }
+        }
+
+        async function viewJob(jobId) {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`);
+                const job = await response.json();
+                alert(`Job Details:\n\nID: ${job.id}\nStatus: ${job.status}\nCreated: ${new Date(job.createdAt).toLocaleString()}\n\nFull details logged to console.`);
+                console.log('Job details:', job);
+            } catch (error) {
+                alert(`Error loading job: ${error.message}`);
+            }
+        }
+
+        function showStatus(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = `status ${type}`;
+            el.style.display = 'block';
+            if (type === 'success') {
+                setTimeout(() => {
+                    el.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
