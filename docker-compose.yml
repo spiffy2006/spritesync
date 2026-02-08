@@ -1,0 +1,110 @@
+services:
+  web-ui:
+    build: ./services/web-ui
+    container_name: spritesync-web-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ORCHESTRATOR_URL=http://orchestrator:4000
+    volumes:
+      - uploads:/app/uploads
+      - configs:/app/configs
+    depends_on:
+      - orchestrator
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+
+  orchestrator:
+    build: ./services/orchestrator
+    container_name: spritesync-orchestrator
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - DIARIZATION_URL=http://diarization:5000
+      - SPEAKER_ID_URL=http://speaker-id:5001
+      - STEM_GENERATOR_URL=http://stem-generator:5002
+      - LIPSYNC_URL=http://lipsync:5003
+      - RENDERER_URL=http://renderer:5004
+      - MUX_URL=http://mux:5005
+    depends_on:
+      - diarization
+      - speaker-id
+      - stem-generator
+      - lipsync
+      - renderer
+      - mux
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+
+  diarization:
+    build: ./services/diarization
+    container_name: spritesync-diarization
+    volumes:
+      - uploads:/app/uploads:ro
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+
+  speaker-id:
+    build: ./services/speaker-id
+    container_name: spritesync-speaker-id
+    volumes:
+      - uploads:/app/uploads:ro
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+
+  stem-generator:
+    build: ./services/stem-generator
+    container_name: spritesync-stem-generator
+    volumes:
+      - uploads:/app/uploads:ro
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+
+  lipsync:
+    build: ./services/lipsync
+    container_name: spritesync-lipsync
+    volumes:
+      - uploads:/app/uploads:ro
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+
+  renderer:
+    build: ./services/renderer
+    container_name: spritesync-renderer
+    volumes:
+      - uploads:/app/uploads:ro
+      - output:/app/output
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+    shm_size: 2gb
+
+  mux:
+    build: ./services/mux
+    container_name: spritesync-mux
+    volumes:
+      - uploads:/app/uploads:ro
+      - output:/app/output
+    networks:
+      - spritesync-network
+    restart: unless-stopped
+
+volumes:
+  uploads:
+    driver: local
+  configs:
+    driver: local
+  output:
+    driver: local
+
+networks:
+  spritesync-network:
+    driver: bridge

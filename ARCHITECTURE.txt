@@ -1,0 +1,87 @@
+╔════════════════════════════════════════════════════════════════════╗
+║                  SpriteSync Architecture Diagram                   ║
+╚════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────┐
+│                         User Interface                            │
+│                      http://localhost:3000                        │
+│                    Browser (HTML/CSS/JavaScript)                  │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+                            │ HTTP/REST
+                            ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                      Web UI Service                               │
+│                        (Node.js/Express)                          │
+│  - File uploads (multer)                                         │
+│  - Config storage                                                │
+│  - Job management                                                │
+│  - API proxy to orchestrator                                     │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+                            │ POST /api/jobs
+                            ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    Orchestrator Service                           │
+│                        (Node.js/Express)                          │
+│  - Pipeline coordination                                         │
+│  - Job queue management                                          │
+│  - Sequential processing                                         │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+                ┌───────────┴────────────┐
+                │                        │
+                │  Sequential Pipeline   │
+                │                        │
+    ┌───────────▼───────────┐            │
+    │   Diarization (5000)  │            │
+    │   (Python/Flask)      │            │
+    │   - Speaker segments  │            │
+    └───────────┬───────────┘            │
+                │                        │
+    ┌───────────▼───────────┐            │
+    │   Speaker-ID (5001)   │            │
+    │   (Python/Flask)      │            │
+    │   - Name mapping      │            │
+    └───────────┬───────────┘            │
+                │                        │
+    ┌───────────▼───────────┐            │
+    │ Stem Generator (5002) │            │
+    │   (Python/Flask)      │            │
+    │   - Audio separation  │            │
+    └───────────┬───────────┘            │
+                │                        │
+    ┌───────────▼───────────┐            │
+    │    Lipsync (5003)     │            │
+    │   (Python/Flask)      │            │
+    │   - Mouth animations  │            │
+    └───────────┬───────────┘            │
+                │                        │
+    ┌───────────▼───────────┐            │
+    │   Renderer (5004)     │            │
+    │  (Node.js/Puppeteer)  │            │
+    │   - Video frames      │            │
+    └───────────┬───────────┘            │
+                │                        │
+    ┌───────────▼───────────┐            │
+    │      Mux (5005)       │            │
+    │   (Python/FFmpeg)     │            │
+    │   - Final MP4         │            │
+    └───────────┬───────────┘            │
+                │                        │
+                ▼                        │
+         ┌──────────────┐                │
+         │ Final Video  │                │
+         │   Output     │                │
+         └──────────────┘                │
+                                         │
+┌────────────────────────────────────────┘
+│
+│  Shared Docker Volumes:
+│  • uploads  - Audio/sprite files
+│  • configs  - Job configurations
+│  • output   - Rendered videos
+│
+└─────────────────────────────────────────
+
+Network: spritesync-network (Docker bridge)
