@@ -6,6 +6,37 @@
 
 Last scan date: 2026-02-08
 
+### Critical Dependency Vulnerabilities - FIXED ✅
+
+**Updated: 2026-02-08**
+
+#### Gunicorn HTTP Request/Response Smuggling (CRITICAL)
+- **CVE**: HTTP Request/Response Smuggling & Request Smuggling vulnerabilities
+- **Affected Version**: gunicorn < 22.0.0
+- **Patched Version**: gunicorn 22.0.0
+- **Severity**: CRITICAL
+- **Impact**: Request smuggling could lead to endpoint restriction bypass
+- **Status**: ✅ FIXED - All Python services updated to gunicorn 22.0.0
+- **Services Updated**:
+  - services/diarization/requirements.txt
+  - services/speaker-id/requirements.txt
+  - services/stem-generator/requirements.txt
+  - services/lipsync/requirements.txt
+  - services/mux/requirements.txt
+
+#### Multer Denial of Service (HIGH)
+- **CVE**: Multiple DoS vulnerabilities
+- **Affected Version**: multer < 2.0.2
+- **Patched Version**: multer 2.0.2
+- **Severity**: HIGH
+- **Issues Fixed**:
+  - DoS via unhandled exception from malformed requests
+  - DoS via memory leaks from unclosed streams
+  - DoS from maliciously crafted requests
+- **Status**: ✅ FIXED - web-ui updated to multer 2.0.2
+- **Services Updated**:
+  - services/web-ui/package.json
+
 ### Python Services - All Clear ✅
 - **Status**: No security vulnerabilities detected
 - **Services Checked**: diarization, speaker-id, stem-generator, lipsync, mux
