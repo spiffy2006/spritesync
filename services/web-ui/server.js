@@ -100,6 +100,7 @@ app.post('/api/upload/sprites', upload.array('sprites', 10), (req, res) => {
 });
 
 // Save job configuration
+// NOTE: Rate limiting should be added in production (e.g., express-rate-limit)
 app.post('/api/config', (req, res) => {
   try {
     const configId = uuidv4();
@@ -119,6 +120,7 @@ app.post('/api/config', (req, res) => {
 });
 
 // Get configuration
+// NOTE: Rate limiting should be added in production (e.g., express-rate-limit)
 app.get('/api/config/:configId', (req, res) => {
   try {
     const configPath = path.join(CONFIGS_DIR, `${req.params.configId}.json`);
@@ -133,6 +135,7 @@ app.get('/api/config/:configId', (req, res) => {
 });
 
 // List all configurations
+// NOTE: Rate limiting should be added in production (e.g., express-rate-limit)
 app.get('/api/configs', (req, res) => {
   try {
     const files = fs.readdirSync(CONFIGS_DIR);
