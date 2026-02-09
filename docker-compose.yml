@@ -10,6 +10,7 @@ services:
     volumes:
       - uploads:/app/uploads
       - configs:/app/configs
+      - profiles:/app/profiles
     depends_on:
       - orchestrator
     networks:
@@ -26,14 +27,15 @@ services:
       - DIARIZATION_URL=http://diarization:5000
       - SPEAKER_ID_URL=http://speaker-id:5001
       - STEM_GENERATOR_URL=http://stem-generator:5002
-      - LIPSYNC_URL=http://lipsync:5003
       - RENDERER_URL=http://renderer:5004
       - MUX_URL=http://mux:5005
+    volumes:
+      - uploads:/app/uploads:ro
+      - cache:/app/cache
     depends_on:
       - diarization
       - speaker-id
       - stem-generator
-      - lipsync
       - renderer
       - mux
     networks:
@@ -43,8 +45,14 @@ services:
   diarization:
     build: ./services/diarization
     container_name: spritesync-diarization
+    ports:
+      - "5010:5000"
+    environment:
+      - PORT=5000
+      - HF_TOKEN=${HF_TOKEN:-}
     volumes:
       - uploads:/app/uploads:ro
+      - cache:/app/cache
     networks:
       - spritesync-network
     restart: unless-stopped
@@ -52,8 +60,14 @@ services:
   speaker-id:
     build: ./services/speaker-id
     container_name: spritesync-speaker-id
+    ports:
+      - "5001:5001"
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
     volumes:
       - uploads:/app/uploads:ro
+      - profiles:/app/profiles
+      - cache:/app/cache
     networks:
       - spritesync-network
     restart: unless-stopped
@@ -61,8 +75,11 @@ services:
   stem-generator:
     build: ./services/stem-generator
     container_name: spritesync-stem-generator
+    ports:
+      - "5002:5002"
     volumes:
       - uploads:/app/uploads:ro
+      - cache:/app/cache
     networks:
       - spritesync-network
     restart: unless-stopped
@@ -79,9 +96,11 @@ services:
   renderer:
     build: ./services/renderer
     container_name: spritesync-renderer
+    ports:
+      - "5004:5004"
     volumes:
       - uploads:/app/uploads:ro
-      - output:/app/output
+      - ./outputs:/app/outputs
     networks:
       - spritesync-network
     restart: unless-stopped
@@ -90,9 +109,11 @@ services:
   mux:
     build: ./services/mux
     container_name: spritesync-mux
+    ports:
+      - "5005:5005"
     volumes:
       - uploads:/app/uploads:ro
-      - output:/app/output
+      - ./outputs:/app/outputs
     networks:
       - spritesync-network
     restart: unless-stopped
@@ -102,7 +123,11 @@ volumes:
     driver: local
   configs:
     driver: local
-  output:
+  outputs:
+    driver: local
+  profiles:
+    driver: local
+  cache:
     driver: local
 
 networks:

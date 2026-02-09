@@ -4,21 +4,24 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
+const FormData = require('form-data');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || 'http://orchestrator:4000';
+const SPEAKER_ID_URL = process.env.SPEAKER_ID_URL || 'http://speaker-id:5001';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Ensure uploads and configs directories exist
+// Ensure uploads, configs, and profiles directories exist
 const UPLOADS_DIR = '/app/uploads';
 const CONFIGS_DIR = '/app/configs';
-[UPLOADS_DIR, CONFIGS_DIR].forEach(dir => {
+const PROFILES_DIR = '/app/profiles';
+[UPLOADS_DIR, CONFIGS_DIR, PROFILES_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -69,12 +72,18 @@ app.post('/api/upload/sprite', upload.single('sprite'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No sprite file provided' });
     }
+    
+    const speakerName = req.body.speakerName || 'Unknown';
+    const viseme = req.body.viseme || 'default';
+    
     res.json({
       success: true,
       fileId: req.file.filename,
       originalName: req.file.originalname,
       size: req.file.size,
-      path: `/uploads/${req.file.filename}`
+      path: `/uploads/${req.file.filename}`,
+      speakerName: speakerName,
+      viseme: viseme
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -155,7 +164,7 @@ app.get('/api/configs', (req, res) => {
 // Trigger job via orchestrator
 app.post('/api/jobs/trigger', async (req, res) => {
   try {
-    const { configId, audioFileId, spriteFiles } = req.body;
+    const { configId, audioFileId, spriteFiles, spriteMappings } = req.body;
     
     if (!configId || !audioFileId) {
       return res.status(400).json({ error: 'configId and audioFileId are required' });
@@ -165,7 +174,8 @@ app.post('/api/jobs/trigger', async (req, res) => {
     const response = await axios.post(`${ORCHESTRATOR_URL}/api/jobs`, {
       configId,
       audioFileId,
-      spriteFiles: spriteFiles || [],
+      spriteFiles: spriteFiles || [], // Keep for backward compatibility
+      spriteMappings: spriteMappings || {}, // New organized sprite mappings
       triggeredAt: new Date().toISOString()
     });
     
@@ -206,6 +216,155 @@ app.get('/api/jobs', async (req, res) => {
     console.error('Error listing jobs:', error.message);
     res.status(500).json({ 
       error: 'Failed to list jobs',
+      details: error.response?.data || error.message 
+    });
+  }
+});
+
+// Retry a failed job (proxy to orchestrator)
+app.post('/api/jobs/:jobId/retry', async (req, res) => {
+  try {
+    const response = await axios.post(`${ORCHESTRATOR_URL}/api/jobs/${req.params.jobId}/retry`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error retrying job:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to retry job',
+      details: error.response?.data || error.message 
+    });
+  }
+});
+
+// Upload speaker profile
+app.post('/api/upload/profile', upload.single('profile'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No profile file provided' });
+    }
+    
+    // Extract speaker name from filename or request body
+    const speakerName = req.body.speakerName || path.parse(req.file.originalname).name;
+    
+    // Rename file to speaker name with appropriate extension
+    const extension = path.extname(req.file.filename);
+    const profileFilename = `${speakerName}${extension}`;
+    const profilePath = path.join(PROFILES_DIR, profileFilename);
+    
+    // Move file to profiles directory
+    fs.renameSync(req.file.path, profilePath);
+    
+    res.json({
+      success: true,
+      speakerName,
+      filename: profileFilename,
+      path: `/profiles/${profileFilename}`,
+      size: req.file.size
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List all speaker profiles
+app.get('/api/profiles', (req, res) => {
+  try {
+    const files = fs.readdirSync(PROFILES_DIR);
+    const profiles = files
+      .filter(f => f.endsWith('.pkl') || f.endsWith('.json'))
+      .map(f => {
+        const speakerName = path.parse(f).name;
+        const filePath = path.join(PROFILES_DIR, f);
+        const stats = fs.statSync(filePath);
+        return {
+          speakerName,
+          filename: f,
+          size: stats.size,
+          uploadedAt: stats.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => a.speakerName.localeCompare(b.speakerName));
+    res.json(profiles);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete speaker profile
+app.delete('/api/profiles/:speakerName', (req, res) => {
+  try {
+    const speakerName = req.params.speakerName;
+    
+    // Try both .pkl and .json extensions
+    let deleted = false;
+    for (const ext of ['.pkl', '.json']) {
+      const profilePath = path.join(PROFILES_DIR, `${speakerName}${ext}`);
+      if (fs.existsSync(profilePath)) {
+        fs.unlinkSync(profilePath);
+        deleted = true;
+        break;
+      }
+    }
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    res.json({ success: true, speakerName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create speaker profile from audio sample (proxy to speaker-id service)
+app.post('/api/profiles/create', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+    
+    const speakerName = req.body.speakerName || req.body.speaker_name;
+    if (!speakerName) {
+      // Clean up uploaded file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ error: 'Speaker name is required' });
+    }
+    
+    // Forward to speaker-id service
+    const formData = new FormData();
+    formData.append('audio', fs.createReadStream(req.file.path), {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype
+    });
+    formData.append('speakerName', speakerName);
+    
+    try {
+      const response = await axios.post(`${SPEAKER_ID_URL}/api/create-profile`, formData, {
+        headers: formData.getHeaders(),
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      
+      // Clean up uploaded file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      res.json(response.data);
+    } catch (error) {
+      // Clean up uploaded file on error
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      console.error('Error from speaker-id service:', error.response?.data || error.message);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error creating profile from audio:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to create profile from audio',
       details: error.response?.data || error.message 
     });
   }

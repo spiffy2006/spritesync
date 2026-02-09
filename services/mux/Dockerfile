@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create output directory
-RUN mkdir -p /app/output
+RUN mkdir -p /app/outputs
 
 # Expose port
 EXPOSE 5005

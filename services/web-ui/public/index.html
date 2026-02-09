@@ -155,6 +155,65 @@
             color: #666;
             margin-top: 5px;
         }
+        .speaker-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .speaker-section h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .speaker-section input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .viseme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .viseme-upload {
+            display: flex;
+            flex-direction: column;
+        }
+        .viseme-upload label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        .viseme-upload input[type="file"] {
+            padding: 6px;
+            font-size: 12px;
+        }
+        .viseme-status {
+            font-size: 11px;
+            margin-top: 4px;
+            min-height: 16px;
+        }
+        .remove-speaker-btn {
+            padding: 6px 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .remove-speaker-btn:hover {
+            background: #c82333;
+        }
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -185,14 +244,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="spriteFiles">Sprite Images (Multiple Speakers)</label>
-                    <input type="file" id="spriteFiles" accept="image/*" multiple>
-                    <div id="spriteUploadInfo" class="upload-info"></div>
-                </div>
-
-                <div class="form-group">
-                    <label for="speakerNames">Speaker Names (comma-separated)</label>
-                    <input type="text" id="speakerNames" placeholder="Alice, Bob, Charlie">
+                    <label>Speakers & Sprites</label>
+                    <div id="speakersContainer">
+                        <!-- Dynamic speaker sections will be added here -->
+                    </div>
+                    <button type="button" onclick="addSpeakerSection()" style="margin-top: 15px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        + Add Speaker
+                    </button>
+                    <div id="speakersUploadInfo" class="upload-info"></div>
                 </div>
 
                 <div class="form-group">
@@ -221,17 +280,57 @@
                 </div>
             </div>
         </div>
+
+        <div class="main-content" style="margin-top: 30px;">
+            <div class="panel" style="grid-column: 1 / -1;">
+                <h2>Speaker Profiles</h2>
+                <p style="color: #666; margin-bottom: 20px;">
+                    Upload speaker profile files (.pkl or .json) for speaker identification. 
+                    Profiles should contain speaker embeddings generated from sample audio.
+                </p>
+                
+                <div class="form-group">
+                    <h3 style="margin-bottom: 15px; color: #667eea;">Create Profile from Audio Sample</h3>
+                    <p style="font-size: 12px; color: #666; margin-bottom: 15px;">
+                        Upload a short audio sample (10-30 seconds of clean speech) to automatically generate a speaker profile.
+                    </p>
+                    <input type="text" id="createProfileSpeakerName" placeholder="Speaker Name (e.g., Alice)" style="margin-bottom: 10px;">
+                    <input type="file" id="createProfileAudio" accept="audio/*">
+                    <button onclick="createProfileFromAudio()" style="margin-top: 8px; width: auto; padding: 8px 16px; background: #28a745;">Create Profile from Audio</button>
+                    <div id="createProfileStatus" class="status"></div>
+                </div>
+
+                <div class="form-group" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                    <h3 style="margin-bottom: 15px; color: #667eea;">Or Upload Existing Profile File</h3>
+                    <input type="file" id="profileFile" accept=".pkl,.json">
+                    <input type="text" id="profileSpeakerName" placeholder="Speaker Name (optional, uses filename if not provided)" style="margin-top: 8px;">
+                    <button onclick="uploadProfile()" style="margin-top: 8px; width: auto; padding: 8px 16px;">Upload Profile File</button>
+                    <div id="profileUploadStatus" class="status"></div>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h3>Uploaded Profiles</h3>
+                    <button onclick="refreshProfiles()" style="margin-bottom: 15px;">Refresh</button>
+                    <div id="profileList" class="job-list">
+                        <p style="color: #666; text-align: center;">No profiles uploaded yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         let audioFileId = null;
-        let spriteFileIds = [];
+        let speakers = []; // Array of { name: string, sprites: { viseme: fileId } }
 
         // Auto-refresh jobs every 10 seconds
         setInterval(refreshJobs, 10000);
         
         // Initial load
         refreshJobs();
+        
+        // Add initial speaker section
+        addSpeakerSection();
 
         // Handle audio file upload
         document.getElementById('audioFile').addEventListener('change', async (e) => {
@@ -259,37 +358,196 @@
             }
         });
 
-        // Handle sprite files upload
-        document.getElementById('spriteFiles').addEventListener('change', async (e) => {
-            const files = e.target.files;
-            if (!files.length) return;
+        // Add speaker section function
+        function addSpeakerSection() {
+            const container = document.getElementById('speakersContainer');
+            const speakerIndex = speakers.length;
+            const speakerId = `speaker-${speakerIndex}`;
+            
+            const visemes = [
+                { key: 'A', label: 'A (Ah)' },
+                { key: 'E', label: 'E (Eh)' },
+                { key: 'I', label: 'I (Ee)' },
+                { key: 'O', label: 'O (Oh)' },
+                { key: 'U', label: 'U (Oo)' },
+                { key: 'rest', label: 'Rest (Neutral)' }
+            ];
+            
+            const section = document.createElement('div');
+            section.className = 'speaker-section';
+            section.id = speakerId;
+            section.innerHTML = `
+                <h3>
+                    <span>Speaker ${speakerIndex + 1}</span>
+                    <button type="button" class="remove-speaker-btn" onclick="removeSpeakerSection('${speakerId}')">Remove</button>
+                </h3>
+                <input type="text" 
+                       id="${speakerId}-name" 
+                       placeholder="Speaker Name (e.g., Alice)" 
+                       onchange="updateSpeakerName(${speakerIndex}, this.value)">
+                <div class="viseme-grid">
+                    ${visemes.map(viseme => `
+                        <div class="viseme-upload">
+                            <label>${viseme.label}</label>
+                            <input type="file" 
+                                   accept="image/*"
+                                   id="${speakerId}-${viseme.key}"
+                                   onchange="uploadSprite(${speakerIndex}, '${viseme.key}', this)">
+                            <div id="${speakerId}-${viseme.key}-status" class="viseme-status"></div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            container.appendChild(section);
+            
+            // Initialize speaker data
+            speakers.push({
+                name: '',
+                sprites: {}
+            });
+        }
 
-            const formData = new FormData();
-            for (let file of files) {
-                formData.append('sprites', file);
+        function removeSpeakerSection(speakerId) {
+            const section = document.getElementById(speakerId);
+            if (section) {
+                const index = parseInt(speakerId.split('-')[1]);
+                speakers.splice(index, 1);
+                section.remove();
+                // Re-index remaining speakers
+                updateSpeakerIndices();
+                updateSpeakersUploadInfo();
             }
+        }
 
+        function updateSpeakerIndices() {
+            const container = document.getElementById('speakersContainer');
+            const sections = container.querySelectorAll('.speaker-section');
+            sections.forEach((section, index) => {
+                const h3 = section.querySelector('h3 span');
+                if (h3) h3.textContent = `Speaker ${index + 1}`;
+                
+                // Update all IDs and event handlers
+                const speakerId = `speaker-${index}`;
+                section.id = speakerId;
+                
+                // Update name input
+                const nameInput = section.querySelector('input[type="text"]');
+                if (nameInput) {
+                    nameInput.id = `${speakerId}-name`;
+                    nameInput.setAttribute('onchange', `updateSpeakerName(${index}, this.value)`);
+                }
+                
+                // Update file inputs
+                const visemes = ['A', 'E', 'I', 'O', 'U', 'rest'];
+                visemes.forEach(viseme => {
+                    const fileInput = section.querySelector(`input[data-viseme="${viseme}"], input[id$="-${viseme}"]`);
+                    if (fileInput) {
+                        fileInput.id = `${speakerId}-${viseme}`;
+                        fileInput.setAttribute('onchange', `uploadSprite(${index}, '${viseme}', this)`);
+                    }
+                    const statusEl = section.querySelector(`#${speakerId}-${viseme}-status`);
+                    if (!statusEl) {
+                        const newStatusEl = document.createElement('div');
+                        newStatusEl.id = `${speakerId}-${viseme}-status`;
+                        newStatusEl.className = 'viseme-status';
+                        if (fileInput && fileInput.parentElement) {
+                            fileInput.parentElement.appendChild(newStatusEl);
+                        }
+                    }
+                });
+                
+                // Update remove button
+                const removeBtn = section.querySelector('.remove-speaker-btn');
+                if (removeBtn) {
+                    removeBtn.setAttribute('onclick', `removeSpeakerSection('${speakerId}')`);
+                }
+            });
+            
+            // Rebuild speakers array to match new indices
+            const newSpeakers = [];
+            sections.forEach((section, index) => {
+                const nameInput = section.querySelector('input[type="text"]');
+                const name = nameInput ? nameInput.value : '';
+                const sprites = {};
+                
+                const visemes = ['A', 'E', 'I', 'O', 'U', 'rest'];
+                visemes.forEach(viseme => {
+                    const fileInput = section.querySelector(`input[id$="-${viseme}"]`);
+                    if (fileInput && fileInput.dataset.fileId) {
+                        sprites[viseme] = fileInput.dataset.fileId;
+                    }
+                });
+                
+                newSpeakers.push({ name, sprites });
+            });
+            speakers = newSpeakers;
+        }
+
+        function updateSpeakerName(index, name) {
+            if (speakers[index]) {
+                speakers[index].name = name.trim();
+                updateSpeakersUploadInfo();
+            }
+        }
+
+        async function uploadSprite(speakerIndex, viseme, input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const speaker = speakers[speakerIndex];
+            if (!speaker) return;
+            
+            const speakerId = `speaker-${speakerIndex}`;
+            const statusEl = document.getElementById(`${speakerId}-${viseme}-status`);
+            statusEl.textContent = 'Uploading...';
+            statusEl.style.color = '#666';
+            
             try {
-                document.getElementById('spriteUploadInfo').textContent = 'Uploading...';
-                const response = await fetch('/api/upload/sprites', {
+                const formData = new FormData();
+                formData.append('sprite', file);
+                formData.append('speakerName', speaker.name || `Speaker${speakerIndex + 1}`);
+                formData.append('viseme', viseme);
+                
+                const response = await fetch('/api/upload/sprite', {
                     method: 'POST',
                     body: formData
                 });
+                
                 const data = await response.json();
                 
                 if (data.success) {
-                    spriteFileIds = data.files.map(f => f.fileId);
-                    document.getElementById('spriteUploadInfo').textContent = 
-                        `✓ Uploaded ${data.files.length} sprite(s)`;
+                    speaker.sprites[viseme] = data.fileId;
+                    input.dataset.fileId = data.fileId;
+                    statusEl.textContent = '✓ Uploaded';
+                    statusEl.style.color = '#28a745';
+                    updateSpeakersUploadInfo();
+                } else {
+                    statusEl.textContent = '✗ Error';
+                    statusEl.style.color = '#dc3545';
                 }
             } catch (error) {
-                document.getElementById('spriteUploadInfo').textContent = `✗ Error: ${error.message}`;
+                statusEl.textContent = '✗ Error';
+                statusEl.style.color = '#dc3545';
+                console.error('Upload error:', error);
             }
-        });
+        }
+
+        function updateSpeakersUploadInfo() {
+            const infoEl = document.getElementById('speakersUploadInfo');
+            const totalSpeakers = speakers.filter(s => s.name).length;
+            const totalSprites = speakers.reduce((sum, s) => sum + Object.keys(s.sprites).length, 0);
+            
+            if (totalSpeakers > 0) {
+                infoEl.textContent = `✓ ${totalSpeakers} speaker(s) configured, ${totalSprites} sprite(s) uploaded`;
+                infoEl.style.color = '#28a745';
+            } else {
+                infoEl.textContent = '';
+            }
+        }
 
         async function submitJob() {
             const jobName = document.getElementById('jobName').value;
-            const speakerNames = document.getElementById('speakerNames').value;
             const videoResolution = document.getElementById('videoResolution').value;
             const backgroundColor = document.getElementById('backgroundColor').value;
             
@@ -302,10 +560,35 @@
                 showStatus('submitStatus', 'Please upload an audio file', 'error');
                 return;
             }
+            
+            // Validate speakers
+            const validSpeakers = speakers.filter(s => s.name && Object.keys(s.sprites).length > 0);
+            if (validSpeakers.length === 0) {
+                showStatus('submitStatus', 'Please add at least one speaker with sprites', 'error');
+                return;
+            }
+            
+            // Check if all speakers have required sprites
+            const requiredVisemes = ['A', 'E', 'I', 'O', 'U', 'rest'];
+            const incompleteSpeakers = validSpeakers.filter(s => {
+                return requiredVisemes.some(v => !s.sprites[v]);
+            });
+            
+            if (incompleteSpeakers.length > 0) {
+                const names = incompleteSpeakers.map(s => s.name).join(', ');
+                showStatus('submitStatus', `Please upload all sprites for: ${names}`, 'error');
+                return;
+            }
 
             try {
                 document.getElementById('submitBtn').disabled = true;
                 showStatus('submitStatus', 'Creating job...', 'info');
+
+                // Build sprite mappings object
+                const spriteMappings = {};
+                validSpeakers.forEach(speaker => {
+                    spriteMappings[speaker.name] = speaker.sprites;
+                });
 
                 // First, save the configuration
                 const configResponse = await fetch('/api/config', {
@@ -313,9 +596,10 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         name: jobName,
-                        speakerNames: speakerNames.split(',').map(s => s.trim()).filter(s => s),
+                        speakerNames: validSpeakers.map(s => s.name),
                         videoResolution,
-                        backgroundColor
+                        backgroundColor,
+                        spriteMappings
                     })
                 });
                 const configData = await configResponse.json();
@@ -327,7 +611,7 @@
                     body: JSON.stringify({
                         configId: configData.configId,
                         audioFileId: audioFileId,
-                        spriteFiles: spriteFileIds
+                        spriteMappings: spriteMappings
                     })
                 });
                 const jobData = await jobResponse.json();
@@ -337,11 +621,11 @@
                     // Reset form
                     document.getElementById('jobName').value = '';
                     document.getElementById('audioFile').value = '';
-                    document.getElementById('spriteFiles').value = '';
                     document.getElementById('audioUploadInfo').textContent = '';
-                    document.getElementById('spriteUploadInfo').textContent = '';
+                    document.getElementById('speakersContainer').innerHTML = '';
                     audioFileId = null;
-                    spriteFileIds = [];
+                    speakers = [];
+                    addSpeakerSection();
                     // Refresh job list
                     setTimeout(refreshJobs, 1000);
                 } else {
@@ -365,21 +649,183 @@
                     return;
                 }
 
-                jobList.innerHTML = jobs.map(job => `
-                    <div class="job-item" onclick="viewJob('${job.id}')">
-                        <div>
-                            <strong>${job.name || 'Unnamed Job'}</strong>
-                            <span class="job-status ${job.status}">${job.status}</span>
+                jobList.innerHTML = jobs.map(job => {
+                    const retryButton = job.status === 'failed' 
+                        ? `<button onclick="event.stopPropagation(); retryJob('${job.id}')" style="margin-left: 10px; padding: 4px 12px; background: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Retry</button>`
+                        : '';
+                    
+                    return `
+                        <div class="job-item" onclick="viewJob('${job.id}')">
+                            <div>
+                                <strong>${job.name || 'Unnamed Job'}</strong>
+                                <span class="job-status ${job.status}">${job.status}</span>
+                                ${retryButton}
+                            </div>
+                            <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                                ID: ${job.id} | Created: ${new Date(job.createdAt).toLocaleString()}
+                            </div>
                         </div>
-                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
-                            ID: ${job.id} | Created: ${new Date(job.createdAt).toLocaleString()}
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             } catch (error) {
                 console.error('Error refreshing jobs:', error);
             }
         }
+
+        async function retryJob(jobId) {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}/retry`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('submitStatus', `Job retried! New job ID: ${data.jobId}`, 'success');
+                    // Refresh job list after a short delay
+                    setTimeout(refreshJobs, 1000);
+                } else {
+                    showStatus('submitStatus', `Error retrying job: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus('submitStatus', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function createProfileFromAudio() {
+            const audioInput = document.getElementById('createProfileAudio');
+            const speakerNameInput = document.getElementById('createProfileSpeakerName');
+            const file = audioInput.files[0];
+            const speakerName = speakerNameInput.value.trim();
+            
+            if (!file) {
+                showStatus('createProfileStatus', 'Please select an audio file', 'error');
+                return;
+            }
+            
+            if (!speakerName) {
+                showStatus('createProfileStatus', 'Please enter a speaker name', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('createProfileStatus', 'Creating profile from audio... This may take a moment.', 'info');
+                
+                const formData = new FormData();
+                formData.append('audio', file);
+                formData.append('speakerName', speakerName);
+                
+                const response = await fetch('/api/profiles/create', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('createProfileStatus', `✓ Profile created successfully for ${data.speakerName}`, 'success');
+                    audioInput.value = '';
+                    speakerNameInput.value = '';
+                    refreshProfiles();
+                } else {
+                    showStatus('createProfileStatus', `✗ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus('createProfileStatus', `✗ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function uploadProfile() {
+            const fileInput = document.getElementById('profileFile');
+            const speakerNameInput = document.getElementById('profileSpeakerName');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showStatus('profileUploadStatus', 'Please select a profile file', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('profileUploadStatus', 'Uploading profile...', 'info');
+                
+                const formData = new FormData();
+                formData.append('profile', file);
+                if (speakerNameInput.value.trim()) {
+                    formData.append('speakerName', speakerNameInput.value.trim());
+                }
+                
+                const response = await fetch('/api/upload/profile', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('profileUploadStatus', `✓ Profile uploaded: ${data.speakerName}`, 'success');
+                    fileInput.value = '';
+                    speakerNameInput.value = '';
+                    refreshProfiles();
+                } else {
+                    showStatus('profileUploadStatus', `✗ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus('profileUploadStatus', `✗ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function refreshProfiles() {
+            try {
+                const response = await fetch('/api/profiles');
+                const profiles = await response.json();
+                
+                const profileList = document.getElementById('profileList');
+                if (!profiles || profiles.length === 0) {
+                    profileList.innerHTML = '<p style="color: #666; text-align: center;">No profiles uploaded yet.</p>';
+                    return;
+                }
+
+                profileList.innerHTML = profiles.map(profile => `
+                    <div class="job-item">
+                        <div>
+                            <strong>${profile.speakerName}</strong>
+                            <span style="font-size: 12px; color: #666;">${(profile.size / 1024).toFixed(2)} KB</span>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            ${profile.filename} | Uploaded: ${new Date(profile.uploadedAt).toLocaleString()}
+                        </div>
+                        <button onclick="deleteProfile('${profile.speakerName}')" style="margin-top: 8px; padding: 4px 8px; font-size: 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">Delete</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error refreshing profiles:', error);
+            }
+        }
+
+        async function deleteProfile(speakerName) {
+            if (!confirm(`Delete profile for ${speakerName}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/profiles/${speakerName}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    refreshProfiles();
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Initial load of profiles
+        refreshProfiles();
 
         async function viewJob(jobId) {
             try {

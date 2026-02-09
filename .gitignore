@@ -50,3 +50,9 @@ tmp/
 *.db
 *.sqlite
 *.sqlite3
+
+## volumes
+outputs/
+profiles/
+cache/
+*.mp4
